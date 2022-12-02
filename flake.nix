@@ -41,6 +41,10 @@
           # nix build
           default = packages.aoc2022rust; # rec
         };
+
+        devShell = rustPkgs.workspaceShell {
+          packages = [ pkgs.rust-analyzer pkgs.rustfmt ];
+        };
       }
     );
 }
