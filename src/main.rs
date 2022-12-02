@@ -1,6 +1,7 @@
 use std::env;
 use std::fs;
 mod d1;
+mod d2;
 pub mod util;
 
 fn input(day: u32) -> String {
@@ -17,6 +18,8 @@ fn main() {
     match (day, part) {
         (1, 0) => d1::part0(input_str),
         (1, 1) => d1::part1(input_str),
+        (2, 0) => d2::part0(input_str),
+        (2, 1) => d2::part1(input_str),
         _ => panic!("Unimplemented: day {} part {}", day, part),
     }
 }
