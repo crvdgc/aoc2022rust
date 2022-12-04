@@ -3,6 +3,7 @@ use std::fs;
 mod d1;
 mod d2;
 mod d3;
+mod d4;
 pub mod util;
 
 fn input(day: u32) -> String {
@@ -23,6 +24,8 @@ fn main() {
         (2, 1) => d2::part1(input_str),
         (3, 0) => d3::part0(input_str),
         (3, 1) => d3::part1(input_str),
+        (4, 0) => d4::part0(input_str),
+        (4, 1) => d4::part1(input_str),
         _ => panic!("Unimplemented: day {} part {}", day, part),
     }
 }
