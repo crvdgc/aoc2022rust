@@ -6,6 +6,7 @@ mod d3;
 mod d4;
 mod d5;
 mod d6;
+mod d7;
 pub mod util;
 
 fn input(day: u32) -> String {
@@ -32,6 +33,8 @@ fn main() {
         (5, 1) => d5::part1(input_str),
         (6, 0) => d6::part0(input_str),
         (6, 1) => d6::part1(input_str),
+        (7, 0) => d7::part0(input_str),
+        (7, 1) => d7::part1(input_str),
         _ => panic!("Unimplemented: day {} part {}", day, part),
     }
 }
