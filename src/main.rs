@@ -2,6 +2,7 @@ use std::env;
 use std::fs;
 mod d1;
 mod d10;
+mod d11;
 mod d2;
 mod d3;
 mod d4;
@@ -44,6 +45,8 @@ fn main() {
         (9, 1) => d9::part1(input_str),
         (10, 0) => d10::part0(input_str),
         (10, 1) => d10::part1(input_str),
+        (11, 0) => d11::part0(&input_str[..]),
+        (11, 1) => d11::part1(&input_str[..]),
         _ => panic!("Unimplemented: day {} part {}", day, part),
     }
 }
