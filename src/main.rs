@@ -3,6 +3,7 @@ use std::fs;
 mod d1;
 mod d10;
 mod d11;
+mod d12;
 mod d2;
 mod d3;
 mod d4;
@@ -47,6 +48,10 @@ fn main() {
         (10, 1) => d10::part1(input_str),
         (11, 0) => d11::part0(&input_str[..]),
         (11, 1) => d11::part1(&input_str[..]),
+        (12, 0) => d12::part0(&input_str[..]),
+        (12, 1) => d12::part1(&input_str[..]),
+        (12, 2) => d12::part0(d12::example_input()),
+        (12, 3) => d12::part1(d12::example_input()),
         _ => panic!("Unimplemented: day {} part {}", day, part),
     }
 }
