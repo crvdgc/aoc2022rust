@@ -5,6 +5,7 @@ mod d10;
 mod d11;
 mod d12;
 mod d13;
+mod d14;
 mod d2;
 mod d3;
 mod d4;
@@ -57,6 +58,10 @@ fn main() {
         (13, 1) => d13::part1(&input_str[..]),
         (13, 2) => d13::part0(d13::example_input()),
         (13, 3) => d13::part1(d13::example_input()),
+        (14, 0) => d14::part0(&input_str[..]),
+        (14, 1) => d14::part1(&input_str[..]),
+        (14, 2) => d14::part0(d14::example_input()),
+        (14, 3) => d14::part1(d14::example_input()),
         _ => panic!("Unimplemented: day {} part {}", day, part),
     }
 }
