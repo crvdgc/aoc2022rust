@@ -1,28 +1,17 @@
 use std::collections::{HashMap, HashSet};
 
 type Valve = (char, char);
-type RevAdjEdge = HashMap<Valve, HashSet<Valve>>;
+type AdjEdge = HashMap<Valve, HashSet<Valve>>;
 
-fn insert_edge(rev_adj_edge: &mut RevAdjEdge, from: Valve, to: Valve) {
-    match rev_adj_edge.get_mut(&to) {
+fn insert_edge(graph: &mut AdjEdge, from: Valve, to: Valve) {
+    match graph.get_mut(&from) {
         None => {
-            rev_adj_edge.insert(to, HashSet::from([from]));
+            graph.insert(from, HashSet::from([to]));
         }
         Some(edges) => {
-            edges.insert(from);
+            edges.insert(to);
         }
     }
-}
-
-fn init_scores(rev_adj_edge: &RevAdjEdge) -> HashMap<Valve, Option<u32>> {
-    let mut scores: HashMap<Valve, Option<u32>> = rev_adj_edge.keys().map(|k| (*k, None)).collect();
-    match scores.get_mut(&('A', 'A')) {
-        Some(score) => *score = Some(0),
-        None => {
-            scores.insert(('A', 'A'), Some(0));
-        }
-    }
-    scores
 }
 
 fn parse_valve(input: &str) -> Valve {
@@ -35,15 +24,93 @@ fn parse_line(input: &str) -> (Valve, u32, Vec<Valve>) {
     let valve_part = iter.next().unwrap();
     let tunnel_part = iter.next().unwrap();
     let mut iter = valve_part.split('=');
-    let from = parse_valve(iter.next().unwrap());
+    let from = parse_valve(iter.next().unwrap().strip_prefix("Valve ").unwrap());
     let flow_rate: u32 = iter.next().unwrap().parse().unwrap();
     let tos = tunnel_part.split(' ').skip(4).map(parse_valve).collect();
     (from, flow_rate, tos)
 }
 
+#[derive(Debug)]
+struct ValveState {
+    flow_rate: u32,
+    opened: bool,
+}
+
+impl ValveState {
+    fn new(flow_rate: u32) -> Self {
+        Self {
+            flow_rate,
+            opened: false,
+        }
+    }
+}
+
+fn init_state(graph: &AdjEdge, flow_rates: &HashMap<Valve, u32>) -> HashMap<Valve, ValveState> {
+    graph
+        .keys()
+        .map(|k| (*k, ValveState::new(*flow_rates.get(k).unwrap())))
+        .collect()
+}
+
+fn dfs(
+    state: &mut HashMap<Valve, ValveState>,
+    graph: &AdjEdge,
+    at: Valve,
+    minutes_left: u32,
+    score: u32,
+) -> u32 {
+    if minutes_left == 0 {
+        score
+    } else {
+        let cur = state.get_mut(&at).unwrap();
+        let cur_flow_rate = cur.flow_rate;
+        let mut candidates: Vec<u32> = Vec::new();
+        if !cur.opened && cur_flow_rate > 0 {
+            cur.opened = true;
+            let minutes_left = minutes_left - 1;
+            let rest_best = dfs(
+                state,
+                graph,
+                at,
+                minutes_left,
+                score + cur_flow_rate * minutes_left,
+            );
+            candidates.push(rest_best);
+            state.get_mut(&at).unwrap().opened = false;
+        }
+        for neighbor in graph.get(&at).unwrap() {
+            let rest_best = dfs(state, graph, *neighbor, minutes_left - 1, score);
+            candidates.push(rest_best);
+        }
+        *candidates.iter().max().unwrap()
+    }
+}
+
 pub fn part0(input: &str) {
-    let lines: Vec<(Valve, u32, Vec<Valve>)> = input.lines().map(parse_line).collect();
-    dbg!(lines);
+    let (valves, (flows, toss)): (Vec<_>, (Vec<_>, Vec<_>)) = input
+        .lines()
+        .map(parse_line)
+        .map(|(v, f, ts)| (v, (f, ts)))
+        .unzip();
+    // dbg!(&valves);
+    let graph: AdjEdge = {
+        let mut graph = HashMap::new();
+        for (from, tos) in valves.iter().zip(toss.iter()) {
+            for to in tos {
+                insert_edge(&mut graph, *from, *to);
+            }
+        }
+        graph
+    };
+    let flow_rates: HashMap<Valve, u32> = valves
+        .iter()
+        .zip(flows.iter())
+        .map(|(v, f)| (*v, *f))
+        .collect();
+    let mut state = init_state(&graph, &flow_rates);
+    // dbg!(&state);
+    let ans = dfs(&mut state, &graph, ('A', 'A'), 10, 0);
+    println!("{}", ans);
 }
 
 pub fn part1(input: &str) {}
