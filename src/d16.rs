@@ -1,25 +1,18 @@
 use std::collections::{HashMap, HashSet};
 
-type Valve = (char, char);
-type AdjEdge = HashMap<Valve, HashSet<Valve>>;
+type AdjMat<T> = Vec<Vec<T>>;
 
-fn insert_edge(graph: &mut AdjEdge, from: Valve, to: Valve) {
-    match graph.get_mut(&from) {
-        None => {
-            graph.insert(from, HashSet::from([to]));
-        }
-        Some(edges) => {
-            edges.insert(to);
-        }
-    }
+fn parse_valve(input: &str) -> usize {
+    // index two upper case chars
+    let vs: Vec<usize> = input
+        .chars()
+        .take(2)
+        .map(|c| c as usize - 'A' as usize)
+        .collect();
+    vs[0] * 26 + vs[1]
 }
 
-fn parse_valve(input: &str) -> Valve {
-    let mut iter = input.chars();
-    (iter.next().unwrap(), iter.next().unwrap())
-}
-
-fn parse_line(input: &str) -> (Valve, u32, Vec<Valve>) {
+fn parse_line(input: &str) -> (usize, u32, Vec<usize>) {
     let mut iter = input.split("; ");
     let valve_part = iter.next().unwrap();
     let tunnel_part = iter.next().unwrap();
@@ -30,87 +23,102 @@ fn parse_line(input: &str) -> (Valve, u32, Vec<Valve>) {
     (from, flow_rate, tos)
 }
 
-#[derive(Debug)]
-struct ValveState {
-    flow_rate: u32,
-    opened: bool,
-}
-
-impl ValveState {
-    fn new(flow_rate: u32) -> Self {
-        Self {
-            flow_rate,
-            opened: false,
-        }
-    }
-}
-
-fn init_state(graph: &AdjEdge, flow_rates: &HashMap<Valve, u32>) -> HashMap<Valve, ValveState> {
-    graph
-        .keys()
-        .map(|k| (*k, ValveState::new(*flow_rates.get(k).unwrap())))
+fn create_order_map(xs: &[usize], index_first: bool) -> HashMap<usize, usize> {
+    let mut indexed: Vec<(usize, usize)> = xs.iter().copied().enumerate().collect();
+    indexed.sort_by_key(|(_i, x)| *x);
+    indexed
+        .iter()
+        .map(|(i, x)| if index_first { (*i, *x) } else { (*x, *i) })
         .collect()
 }
 
-fn dfs(
-    state: &mut HashMap<Valve, ValveState>,
-    graph: &AdjEdge,
-    at: Valve,
-    minutes_left: u32,
-    score: u32,
-) -> u32 {
-    if minutes_left == 0 {
-        score
-    } else {
-        let cur = state.get_mut(&at).unwrap();
-        let cur_flow_rate = cur.flow_rate;
-        let mut candidates: Vec<u32> = Vec::new();
-        if !cur.opened && cur_flow_rate > 0 {
-            cur.opened = true;
-            let minutes_left = minutes_left - 1;
-            let rest_best = dfs(
-                state,
-                graph,
-                at,
-                minutes_left,
-                score + cur_flow_rate * minutes_left,
-            );
-            candidates.push(rest_best);
-            state.get_mut(&at).unwrap().opened = false;
+fn create_graph(
+    froms: &Vec<usize>,
+    toss: &[Vec<usize>],
+) -> (AdjMat<Option<u32>>, HashMap<usize, usize>) {
+    let n = froms.len();
+    let mut graph = vec![vec![None; n]; n];
+    let rev_order_map = create_order_map(froms, false);
+
+    // for connected valves, takes 1 min to go
+    for (from, tos) in froms.iter().zip(toss.iter()) {
+        let from = rev_order_map.get(from).unwrap();
+        for to in tos.iter() {
+            let to = rev_order_map.get(to).unwrap();
+            graph[*from][*to] = Some(1);
         }
-        for neighbor in graph.get(&at).unwrap() {
-            let rest_best = dfs(state, graph, *neighbor, minutes_left - 1, score);
-            candidates.push(rest_best);
+    }
+
+    // diagonal
+    (0..n).for_each(|i| graph[i][i] = Some(0));
+    (graph, rev_order_map)
+}
+
+/// pair-wise shortest path
+fn floyd_warshall(graph: &mut AdjMat<Option<u32>>) {
+    let n = graph.len();
+    for k in 0..n {
+        for i in 0..n {
+            for j in 0..n {
+                match graph[i][j] {
+                    None => {
+                        if let (Some(d_ik), Some(d_kj)) = (graph[i][k], graph[k][j]) {
+                            graph[i][j] = Some(d_ik + d_kj)
+                        }
+                    }
+                    Some(d_ij) => {
+                        if let (Some(d_ik), Some(d_kj)) = (graph[i][k], graph[k][j]) {
+                            let d_ikj = d_ik + d_kj;
+                            if d_ikj < d_ij {
+                                graph[i][j] = Some(d_ikj)
+                            }
+                        }
+                    }
+                }
+            }
         }
-        *candidates.iter().max().unwrap()
     }
 }
 
+fn filter_non_zero(froms: &[usize], flows: &[u32]) -> Vec<usize> {
+    froms
+        .iter()
+        .zip(flows.iter())
+        .filter_map(|(v, f)| if *f != 0 { Some(*v) } else { None })
+        .collect()
+}
+
+fn compress_graph(graph: &AdjMat<Option<u32>>, vs: &[usize]) -> AdjMat<Option<u32>> {
+    let order_map = create_order_map(vs, true);
+    let n = order_map.len();
+    let mut new_graph = vec![vec![None; n]; n];
+    for i in 0..n {
+        for j in 0..n {
+            new_graph[i][j] = graph[*order_map.get(&i).unwrap()][*order_map.get(&j).unwrap()];
+        }
+    }
+    new_graph
+}
+
 pub fn part0(input: &str) {
-    let (valves, (flows, toss)): (Vec<_>, (Vec<_>, Vec<_>)) = input
+    let (froms, (flows, toss)): (Vec<_>, (Vec<_>, Vec<_>)) = input
         .lines()
         .map(parse_line)
         .map(|(v, f, ts)| (v, (f, ts)))
         .unzip();
-    // dbg!(&valves);
-    let graph: AdjEdge = {
-        let mut graph = HashMap::new();
-        for (from, tos) in valves.iter().zip(toss.iter()) {
-            for to in tos {
-                insert_edge(&mut graph, *from, *to);
-            }
-        }
-        graph
-    };
-    let flow_rates: HashMap<Valve, u32> = valves
+    // dbg!(&froms);
+    // dbg!(&flows);
+    // dbg!(&toss);
+    let (mut graph, rev_order_map) = create_graph(&froms, &toss);
+    // dbg!(&graph);
+    floyd_warshall(&mut graph);
+    // dbg!(&graph);
+    let non_zeros: Vec<usize> = filter_non_zero(&froms, &flows)
         .iter()
-        .zip(flows.iter())
-        .map(|(v, f)| (*v, *f))
+        .map(|x| *rev_order_map.get(x).unwrap())
         .collect();
-    let mut state = init_state(&graph, &flow_rates);
-    // dbg!(&state);
-    let ans = dfs(&mut state, &graph, ('A', 'A'), 10, 0);
-    println!("{}", ans);
+    let graph = compress_graph(&graph, &non_zeros);
+    dbg!(&graph);
 }
 
 pub fn part1(input: &str) {}
