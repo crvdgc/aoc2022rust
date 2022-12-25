@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, VecDeque};
 
 type AdjMat<T> = Vec<Vec<T>>;
 
@@ -23,35 +23,36 @@ fn parse_line(input: &str) -> (usize, u32, Vec<usize>) {
     (from, flow_rate, tos)
 }
 
-fn create_order_map(xs: &[usize], index_first: bool) -> HashMap<usize, usize> {
-    let mut indexed: Vec<(usize, usize)> = xs.iter().copied().enumerate().collect();
-    indexed.sort_by_key(|(_i, x)| *x);
+fn create_order_map(xs: &[usize]) -> (HashMap<usize, usize>, Vec<usize>) {
+    let mut indexed: Vec<usize> = xs.iter().copied().collect();
+    indexed.sort_unstable();
     indexed
         .iter()
-        .map(|(i, x)| if index_first { (*i, *x) } else { (*x, *i) })
-        .collect()
+        .enumerate()
+        .map(|(i, x)| ((*x, i), *x))
+        .unzip()
 }
 
 fn create_graph(
     froms: &Vec<usize>,
     toss: &[Vec<usize>],
-) -> (AdjMat<Option<u32>>, HashMap<usize, usize>) {
+) -> (AdjMat<Option<u32>>, HashMap<usize, usize>, Vec<usize>) {
     let n = froms.len();
     let mut graph = vec![vec![None; n]; n];
-    let rev_order_map = create_order_map(froms, false);
+    let (v2o, o2v) = create_order_map(froms);
 
     // for connected valves, takes 1 min to go
     for (from, tos) in froms.iter().zip(toss.iter()) {
-        let from = rev_order_map.get(from).unwrap();
+        let from = v2o[from];
         for to in tos.iter() {
-            let to = rev_order_map.get(to).unwrap();
-            graph[*from][*to] = Some(1);
+            let to = v2o[to];
+            graph[from][to] = Some(1);
         }
     }
 
     // diagonal
     (0..n).for_each(|i| graph[i][i] = Some(0));
-    (graph, rev_order_map)
+    (graph, v2o, o2v)
 }
 
 /// pair-wise shortest path
@@ -88,16 +89,73 @@ fn filter_non_zero(froms: &[usize], flows: &[u32]) -> Vec<usize> {
         .collect()
 }
 
-fn compress_graph(graph: &AdjMat<Option<u32>>, vs: &[usize]) -> AdjMat<Option<u32>> {
-    let order_map = create_order_map(vs, true);
-    let n = order_map.len();
+fn compress_graph(
+    graph: &AdjMat<Option<u32>>,
+    vs: &[usize],
+) -> (AdjMat<Option<u32>>, HashMap<usize, usize>, Vec<usize>) {
+    let (v2o, o2v) = create_order_map(vs);
+    let n = vs.len();
     let mut new_graph = vec![vec![None; n]; n];
     for i in 0..n {
         for j in 0..n {
-            new_graph[i][j] = graph[*order_map.get(&i).unwrap()][*order_map.get(&j).unwrap()];
+            new_graph[i][j] = graph[o2v[i]][o2v[j]];
         }
     }
-    new_graph
+    (new_graph, v2o, o2v)
+}
+
+struct State {
+    at: usize,
+    visited: Vec<bool>,
+    minutes_left: u32,
+    score: u32,
+}
+
+fn dfs(
+    graph: &AdjMat<Option<u32>>,
+    flows: &[u32],
+    starts: &[(usize, u32)],
+    total_minutes: u32,
+) -> u32 {
+    let mut queue: VecDeque<State> = VecDeque::new();
+    let n = graph.len();
+    for (start, minutes) in starts {
+        let mut visited = vec![false; n];
+        visited[*start] = true;
+        let minutes_left = total_minutes - minutes - 1;
+        let score = flows[*start] * minutes_left;
+        queue.push_back(State {
+            at: *start,
+            visited,
+            minutes_left,
+            score,
+        })
+    }
+    let mut best: u32 = 0;
+    while !queue.is_empty() {
+        let cur = queue.pop_front().unwrap();
+        if cur.score > best {
+            best = cur.score;
+        }
+        let nexts = graph[cur.at]
+            .iter()
+            .enumerate()
+            .filter_map(|(i, x)| x.map(|x| (i, x)))
+            .filter(|(i, x)| *x < cur.minutes_left && !cur.visited[*i]);
+        for (next, minutes) in nexts {
+            let mut visited = cur.visited.clone();
+            visited[next] = true;
+            let minutes_left = cur.minutes_left - minutes - 1;
+            let next_score = flows[next] * minutes_left;
+            queue.push_back(State {
+                at: next,
+                visited,
+                minutes_left,
+                score: cur.score + next_score,
+            })
+        }
+    }
+    best
 }
 
 pub fn part0(input: &str) {
@@ -107,18 +165,43 @@ pub fn part0(input: &str) {
         .map(|(v, f, ts)| (v, (f, ts)))
         .unzip();
     // dbg!(&froms);
-    // dbg!(&flows);
+    // dbg!(&froms.iter().zip(flows.iter()).collect::<Vec<_>>());
     // dbg!(&toss);
-    let (mut graph, rev_order_map) = create_graph(&froms, &toss);
+    let (mut graph, name2graph, graph2name) = create_graph(&froms, &toss);
     // dbg!(&graph);
     floyd_warshall(&mut graph);
     // dbg!(&graph);
     let non_zeros: Vec<usize> = filter_non_zero(&froms, &flows)
         .iter()
-        .map(|x| *rev_order_map.get(x).unwrap())
+        .map(|i| name2graph[i])
         .collect();
-    let graph = compress_graph(&graph, &non_zeros);
-    dbg!(&graph);
+    // dbg!(&non_zeros);
+    let (compressed_graph, graph2cgraph, cgraph2graph) = compress_graph(&graph, &non_zeros);
+    // dbg!(&graph);
+    let starts: Vec<(usize, u32)> = graph[0]
+        .iter()
+        .enumerate()
+        .filter_map(|(i, x)| {
+            if let (Some(i), Some(x)) = (graph2cgraph.get(&i), x) {
+                Some((*i, *x))
+            } else {
+                None
+            }
+        })
+        .filter(|(_i, x)| *x < 30)
+        .collect();
+    // dbg!(&compress_order_map);
+    // dbg!(&starts);
+    let name2flow: HashMap<usize, u32> = froms
+        .iter()
+        .zip(flows.iter())
+        .map(|(from, flow)| (*from, *flow))
+        .collect();
+    let compressed_flows: Vec<u32> = (0..compressed_graph.len())
+        .map(|i| name2flow[&graph2name[cgraph2graph[i]]])
+        .collect();
+    let ans = dfs(&compressed_graph, &compressed_flows, &starts, 30);
+    println!("{}", ans);
 }
 
 pub fn part1(input: &str) {}
