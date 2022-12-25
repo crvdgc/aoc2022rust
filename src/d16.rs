@@ -256,8 +256,13 @@ fn dfs_part1(
         })
     }
     let mut best: u32 = 0;
+    let mut counter: u64 = 0;
     while !queue.is_empty() {
-        dbg!(queue.len());
+        counter += 1;
+        if counter % 100000 == 0 {
+            print!("{} ", counter);
+        }
+        // dbg!(queue.len());
         let cur = queue.pop_front().unwrap();
         if cur.score > best {
             best = cur.score;
@@ -272,13 +277,14 @@ fn dfs_part1(
             visited[next] = true;
             let minutes_left = cur.minutes_left - minutes - 1;
             let next_score = flows[next] * minutes_left;
+            let score = cur.score + next_score;
             queue.push_back(StatePart1 {
                 at: next,
                 at_elephant: cur.at_elephant,
                 visited,
                 minutes_left,
                 minutes_left_elephant: cur.minutes_left_elephant,
-                score: cur.score + next_score,
+                score,
             })
         }
         let next_elephants = graph[cur.at_elephant]
@@ -291,13 +297,14 @@ fn dfs_part1(
             visited[next_elephant] = true;
             let minutes_left_elephant = cur.minutes_left_elephant - minutes - 1;
             let next_score = flows[next_elephant] * minutes_left_elephant;
+            let score = cur.score + next_score;
             queue.push_back(StatePart1 {
                 at: cur.at,
                 at_elephant: next_elephant,
                 visited,
                 minutes_left: cur.minutes_left,
                 minutes_left_elephant,
-                score: cur.score + next_score,
+                score,
             })
         }
     }
