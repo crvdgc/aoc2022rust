@@ -24,7 +24,7 @@ fn parse_line(input: &str) -> (usize, u32, Vec<usize>) {
 }
 
 fn create_order_map(xs: &[usize]) -> (HashMap<usize, usize>, Vec<usize>) {
-    let mut indexed: Vec<usize> = xs.iter().copied().collect();
+    let mut indexed: Vec<usize> = xs.to_vec();
     indexed.sort_unstable();
     indexed
         .iter()
@@ -204,7 +204,151 @@ pub fn part0(input: &str) {
     println!("{}", ans);
 }
 
-pub fn part1(input: &str) {}
+struct StatePart1 {
+    at: usize,
+    at_elephant: usize,
+    visited: Vec<bool>,
+    minutes_left: u32,
+    minutes_left_elephant: u32,
+    score: u32,
+}
+
+fn pairs<T>(xs: &[T]) -> Vec<(T, T)>
+where
+    T: Copy,
+{
+    if xs.is_empty() {
+        Vec::new()
+    } else {
+        let mut cur_pairs = Vec::new();
+        let x0 = xs[0];
+        for x in xs[1..].iter() {
+            cur_pairs.push((x0, *x));
+        }
+        let mut rest_pairs = pairs(&xs[1..]);
+        cur_pairs.append(&mut rest_pairs);
+        cur_pairs
+    }
+}
+
+fn dfs_part1(
+    graph: &AdjMat<Option<u32>>,
+    flows: &[u32],
+    starts: &[(usize, u32)],
+    total_minutes: u32,
+) -> u32 {
+    let mut queue: VecDeque<StatePart1> = VecDeque::new();
+    let n = graph.len();
+    for ((start, minutes), (start_elephant, minutes_elephant)) in pairs(starts) {
+        let mut visited = vec![false; n];
+        visited[start] = true;
+        visited[start_elephant] = true;
+        let minutes_left = total_minutes - minutes - 1;
+        let minutes_left_elephant = total_minutes - minutes_elephant - 1;
+        let score = flows[start] * minutes_left + flows[start_elephant] * minutes_left_elephant;
+        queue.push_back(StatePart1 {
+            at: start,
+            at_elephant: start_elephant,
+            visited,
+            minutes_left,
+            minutes_left_elephant,
+            score,
+        })
+    }
+    let mut best: u32 = 0;
+    while !queue.is_empty() {
+        dbg!(queue.len());
+        let cur = queue.pop_front().unwrap();
+        if cur.score > best {
+            best = cur.score;
+        }
+        let nexts = graph[cur.at]
+            .iter()
+            .enumerate()
+            .filter_map(|(i, x)| x.map(|x| (i, x)))
+            .filter(|(i, x)| *x < cur.minutes_left && !cur.visited[*i]);
+        for (next, minutes) in nexts {
+            let mut visited = cur.visited.clone();
+            visited[next] = true;
+            let minutes_left = cur.minutes_left - minutes - 1;
+            let next_score = flows[next] * minutes_left;
+            queue.push_back(StatePart1 {
+                at: next,
+                at_elephant: cur.at_elephant,
+                visited,
+                minutes_left,
+                minutes_left_elephant: cur.minutes_left_elephant,
+                score: cur.score + next_score,
+            })
+        }
+        let next_elephants = graph[cur.at_elephant]
+            .iter()
+            .enumerate()
+            .filter_map(|(i, x)| x.map(|x| (i, x)))
+            .filter(|(i, x)| *x < cur.minutes_left_elephant && !cur.visited[*i]);
+        for (next_elephant, minutes) in next_elephants {
+            let mut visited = cur.visited.clone();
+            visited[next_elephant] = true;
+            let minutes_left_elephant = cur.minutes_left_elephant - minutes - 1;
+            let next_score = flows[next_elephant] * minutes_left_elephant;
+            queue.push_back(StatePart1 {
+                at: cur.at,
+                at_elephant: next_elephant,
+                visited,
+                minutes_left: cur.minutes_left,
+                minutes_left_elephant,
+                score: cur.score + next_score,
+            })
+        }
+    }
+    best
+}
+
+pub fn part1(input: &str) {
+    let (froms, (flows, toss)): (Vec<_>, (Vec<_>, Vec<_>)) = input
+        .lines()
+        .map(parse_line)
+        .map(|(v, f, ts)| (v, (f, ts)))
+        .unzip();
+    // dbg!(&froms);
+    // dbg!(&froms.iter().zip(flows.iter()).collect::<Vec<_>>());
+    // dbg!(&toss);
+    let (mut graph, name2graph, graph2name) = create_graph(&froms, &toss);
+    // dbg!(&graph);
+    floyd_warshall(&mut graph);
+    // dbg!(&graph);
+    let non_zeros: Vec<usize> = filter_non_zero(&froms, &flows)
+        .iter()
+        .map(|i| name2graph[i])
+        .collect();
+    // dbg!(&non_zeros);
+    let (compressed_graph, graph2cgraph, cgraph2graph) = compress_graph(&graph, &non_zeros);
+    // dbg!(&graph);
+    let starts: Vec<(usize, u32)> = graph[0]
+        .iter()
+        .enumerate()
+        .filter_map(|(i, x)| {
+            if let (Some(i), Some(x)) = (graph2cgraph.get(&i), x) {
+                Some((*i, *x))
+            } else {
+                None
+            }
+        })
+        .filter(|(_i, x)| *x < 26)
+        .collect();
+    // dbg!(&compress_order_map);
+    // dbg!(&starts);
+    let name2flow: HashMap<usize, u32> = froms
+        .iter()
+        .zip(flows.iter())
+        .map(|(from, flow)| (*from, *flow))
+        .collect();
+    let compressed_flows: Vec<u32> = (0..compressed_graph.len())
+        .map(|i| name2flow[&graph2name[cgraph2graph[i]]])
+        .collect();
+    let ans = dfs_part1(&compressed_graph, &compressed_flows, &starts, 26);
+    println!("{}", ans);
+}
 
 pub fn example_input() -> &'static str {
     r#"Valve AA has flow rate=0; tunnels lead to valves DD, II, BB
