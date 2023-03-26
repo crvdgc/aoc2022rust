@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
 
 const N: usize = 26;
@@ -12,59 +11,91 @@ enum Expr {
     Div(usize, usize),
 }
 
-fn eval(t: &HashMap<usize, RefCell<Expr>>) {
-    for expr in t.values() {
-        expr.replace_with(|&mut old| match old {
-            Expr::Add(e0, e1) => {
-                if let (Expr::Lit(v0), Expr::Lit(v1)) = (*t[&e0].borrow(), *t[&e1].borrow()) {
-                    Expr::Lit(v0 + v1)
-                } else {
-                    old
-                }
-            }
-            Expr::Sub(e0, e1) => {
-                if let (Expr::Lit(v0), Expr::Lit(v1)) = (*t[&e0].borrow(), *t[&e1].borrow()) {
-                    Expr::Lit(v0 - v1)
-                } else {
-                    old
-                }
-            }
-            Expr::Mul(e0, e1) => {
-                if let (Expr::Lit(v0), Expr::Lit(v1)) = (*t[&e0].borrow(), *t[&e1].borrow()) {
-                    Expr::Lit(v0 * v1)
-                } else {
-                    old
-                }
-            }
-            Expr::Div(e0, e1) => {
-                if let (Expr::Lit(v0), Expr::Lit(v1)) = (*t[&e0].borrow(), *t[&e1].borrow()) {
-                    Expr::Lit(v0 / v1)
-                } else {
-                    old
-                }
-            }
-            Expr::Lit(_) => old,
-        });
+fn dfs(root: usize, t: &HashMap<usize, Expr>) -> i64 {
+    match t[&root] {
+        Expr::Lit(n) => n,
+        Expr::Add(e1, e2) => dfs(e1, t) + dfs(e2, t),
+        Expr::Sub(e1, e2) => dfs(e1, t) - dfs(e2, t),
+        Expr::Mul(e1, e2) => dfs(e1, t) * dfs(e2, t),
+        Expr::Div(e1, e2) => dfs(e1, t) / dfs(e2, t),
     }
 }
 
 pub fn part0(input: &str) {
     let t = parse_input(input);
     // dbg!(&t);
-    for _ in 0..t.len() {
-        if let Some(r) = t.get(&name_to_index(&mut "root".chars())) {
-            // dbg!("has name");
-            if let Expr::Lit(n) = *r.borrow() {
-                println!("{}", n);
-                break;
-            }
-        }
-        eval(&t);
-    }
-    // dbg!(&t);
+    let res = dfs(name_to_index(&mut "root".chars()), &t);
+    println!("{}", res);
 }
 
-pub fn part1(input: &str) {}
+fn dfs1(humn_n: usize, root: usize, t: &HashMap<usize, Expr>) -> Option<i64> {
+    if root == humn_n {
+        None
+    } else {
+        match t[&root] {
+            Expr::Lit(n) => Some(n),
+            Expr::Add(e1, e2) => match (dfs1(humn_n, e1, t), dfs1(humn_n, e2, t)) {
+                (Some(v1), Some(v2)) => Some(v1 + v2),
+                _ => None,
+            },
+            Expr::Sub(e1, e2) => match (dfs1(humn_n, e1, t), dfs1(humn_n, e2, t)) {
+                (Some(v1), Some(v2)) => Some(v1 - v2),
+                _ => None,
+            },
+            Expr::Mul(e1, e2) => match (dfs1(humn_n, e1, t), dfs1(humn_n, e2, t)) {
+                (Some(v1), Some(v2)) => Some(v1 * v2),
+                _ => None,
+            },
+            Expr::Div(e1, e2) => match (dfs1(humn_n, e1, t), dfs1(humn_n, e2, t)) {
+                (Some(v1), Some(v2)) => Some(v1 / v2),
+                _ => None,
+            },
+        }
+    }
+}
+
+fn find(humn_n: usize, root: usize, t: &HashMap<usize, Expr>, target: i64) -> i64 {
+    if root == humn_n {
+        target
+    } else {
+        match t[&root] {
+            Expr::Lit(_) => panic!("impossible"),
+            Expr::Add(e1, e2) => match dfs1(humn_n, e1, t) {
+                None => find(humn_n, e1, t, target - dfs(e2, t)),
+                Some(v) => find(humn_n, e2, t, target - v),
+            },
+            Expr::Sub(e1, e2) => match dfs1(humn_n, e1, t) {
+                None => find(humn_n, e1, t, target + dfs(e2, t)),
+                Some(v) => find(humn_n, e2, t, v - target),
+            },
+            Expr::Mul(e1, e2) => match dfs1(humn_n, e1, t) {
+                None => find(humn_n, e1, t, target / dfs(e2, t)),
+                Some(v) => find(humn_n, e2, t, target / v),
+            },
+            Expr::Div(e1, e2) => match dfs1(humn_n, e1, t) {
+                None => find(humn_n, e1, t, target * dfs(e2, t)),
+                Some(v) => find(humn_n, e2, t, v / target),
+            },
+        }
+    }
+}
+
+pub fn part1(input: &str) {
+    let t = parse_input(input);
+    let root_n = name_to_index(&mut "root".chars());
+    let humn_n = name_to_index(&mut "humn".chars());
+    match t[&root_n] {
+        Expr::Lit(_) => panic!("root is lit"),
+        Expr::Add(e1, e2) | Expr::Sub(e1, e2) | Expr::Mul(e1, e2) | Expr::Div(e1, e2) => {
+            let (target, humn_e) = match dfs1(humn_n, e1, &t) {
+                None => (dfs1(humn_n, e2, &t).unwrap(), e1),
+                Some(t) => (t, e2),
+            };
+            let humn_v = find(humn_n, humn_e, &t, target);
+            println!("{}", humn_v);
+        }
+    }
+}
 
 fn name_to_index<I>(i: &mut I) -> usize
 where
@@ -79,7 +110,7 @@ where
         + num(i.next().unwrap()) * N.pow(3)
 }
 
-fn parse_input(input: &str) -> HashMap<usize, RefCell<Expr>> {
+fn parse_input(input: &str) -> HashMap<usize, Expr> {
     fn parse_line(line: &str) -> (usize, Expr) {
         let mut iter = line.split(':');
         let label = name_to_index(&mut iter.next().unwrap().chars());
@@ -104,7 +135,7 @@ fn parse_input(input: &str) -> HashMap<usize, RefCell<Expr>> {
     }
     let mut t = HashMap::with_capacity(5000);
     for (label, expr) in input.lines().map(parse_line) {
-        t.insert(label, RefCell::new(expr));
+        t.insert(label, expr);
     }
     t
 }
