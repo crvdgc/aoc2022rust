@@ -30,8 +30,6 @@ pub fn part0(input: &str, width: usize) {
     println!("{}", password);
 }
 
-pub fn part1(input: &str, width: usize, block_n: usize) {}
-
 #[derive(Debug)]
 enum Dir {
     Up,
@@ -280,6 +278,18 @@ fn start_c(first_row: &[Option<bool>]) -> usize {
         .position(|p| matches!(p, Some(false)))
         .expect("No open")
 }
+
+// ┌───┐  ┌─┐
+// │   1122 │
+// │┌──1122┐│
+// ││  33┘ ││
+// ││ ┌33  ││
+// │└5544──┘│
+// │ 5544   │
+// └─66┘    │
+//   66     │
+//    └─────┘
+pub fn part1(input: &str, width: usize, block_n: usize) {}
 
 pub fn example_input() -> &'static str {
     r#"        ...#

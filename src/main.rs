@@ -101,7 +101,7 @@ fn main() {
         (22, 0) => d22::part0(&input_str[..], 150),
         (22, 1) => d22::part1(&input_str[..], 50, 3),
         (22, 2) => d22::part0(d22::example_input(), 16),
-        (22, 3) => d22::part1(d22::example_input(), 4, 4),
+        (22, 3) => panic!("actually..."),
         _ => panic!("unimplemented: day {} part {}", day, part),
     }
 }
