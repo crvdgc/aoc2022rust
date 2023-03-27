@@ -38,14 +38,26 @@ enum Dir {
     Right,
 }
 
+impl Dir {
+    fn to_char(self) -> char {
+        match self {
+            Dir::Up => '^',
+            Dir::Left => '<',
+            Dir::Down => 'v',
+            Dir::Right => '>',
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
 enum Turn {
     L,
     R,
 }
 
 impl Turn {
-    fn to_char(&self) -> char {
-        match &self {
+    fn to_char(self) -> char {
+        match self {
             Self::L => 'L',
             Self::R => 'R',
         }
@@ -289,8 +301,6 @@ fn start_c(first_row: &[Option<bool>]) -> usize {
 }
 
 const B: usize = 50;
-const N: usize = 3;
-const B0: usize = 0;
 const B1: usize = B;
 const B2: usize = 2 * B;
 const B3: usize = 3 * B;
@@ -318,6 +328,7 @@ fn movement_part1(
     map: &[Vec<Option<bool>>],
     (r, c): (usize, usize),
     dir: Dir,
+    is_debug: bool,
 ) -> Option<((usize, usize), Dir)> {
     let in_block = |n: usize, k: usize| n >= k * B && n < (k + 1) * B;
     let to = |r: usize, c: usize, dir: Dir| match map[r][c] {
@@ -325,37 +336,52 @@ fn movement_part1(
         Some(true) => None,
         None => panic!("Not valid ({}, {})", r, c),
     };
+    if is_debug {
+        println!("({}, {}, {}) ", r, c, dir.to_char());
+    }
     match (r, c, dir) {
         (0, c, Dir::Up) if in_block(c, 1) => to(c + B2, 0, Dir::Right), // a1
         (0, c, Dir::Up) if in_block(c, 2) => to(B4I, c - B2, Dir::Up),  // b1
-        (r, B1, Dir::Left) if in_block(r, 0) => to(B3 - r, 0, Dir::Right), // c1
-        (r, B3I, Dir::Right) if in_block(r, 0) => to(B3 - r, B2I, Dir::Left), // d1
+        (r, B1, Dir::Left) if in_block(r, 0) => to(B3I - r, 0, Dir::Right), // c1
+        (r, B3I, Dir::Right) if in_block(r, 0) => to(B3I - r, B2I, Dir::Left), // d1
         (B1I, c, Dir::Down) if in_block(c, 2) => to(c - B1, B2I, Dir::Left), // e1
         (r, B1, Dir::Left) if in_block(r, 1) => to(B2, r - B1, Dir::Down), // f1
         (r, B2I, Dir::Right) if in_block(r, 1) => to(B1I, r + B1, Dir::Up), // e2
         (B2, c, Dir::Up) if in_block(c, 0) => to(c + B1, B1, Dir::Right), // f2
-        (r, 0, Dir::Left) if in_block(r, 2) => to(B3 - r, B1, Dir::Right), // c2
-        (r, B2I, Dir::Right) if in_block(r, 2) => to(B3 - r, B3I, Dir::Left), // d2
+        (r, 0, Dir::Left) if in_block(r, 2) => to(B3I - r, B1, Dir::Right), // c2
+        (r, B2I, Dir::Right) if in_block(r, 2) => to(B3I - r, B3I, Dir::Left), // d2
         (B3I, c, Dir::Down) if in_block(c, 1) => to(c + B2, B1I, Dir::Left), // g1
         (r, 0, Dir::Left) if in_block(r, 3) => to(0, r - B2, Dir::Down), // a2
         (r, B1I, Dir::Right) if in_block(r, 3) => to(B3I, r - B2, Dir::Up), // g2
         (B4I, c, Dir::Down) if in_block(c, 0) => to(0, c + B2, Dir::Down), // b2
-        _ => Some((dir.step((r, c)), dir)),
+        _ => {
+            let (r, c) = dir.step((r, c));
+            to(r, c, dir)
+        }
     }
 }
 
-pub fn part1(input: &str) {
+pub fn part1(input: &str, from: usize, to: usize) {
     let (map, insts) = parse_input(input, WIDTH);
     // pp_map(&map);
     // pp_inst(&insts);
     // let map_t = transpose(&map, width);
     let mut p = (0, start_c(&map[0]));
     let mut dir = Dir::Right;
-    for inst in insts {
+    // let limit = 3;
+    // pp_inst(&insts[0..limit]);
+    let mut i = 0;
+    // for inst in insts.iter().take(limit) {
+    for inst in insts.iter() {
         match inst {
             Inst::Move(n) => {
-                for _ in 0..n {
-                    match movement_part1(&map, p, dir) {
+                for _ in 0..*n {
+                    i += 1;
+                    let is_debug = i >= from && i <= to;
+                    if is_debug {
+                        print!("{}: ", i);
+                    }
+                    match movement_part1(&map, p, dir, is_debug) {
                         None => {
                             break;
                         }
@@ -367,7 +393,7 @@ pub fn part1(input: &str) {
                 }
             }
             Inst::Rotate(turn) => {
-                dir = dir.turn(turn);
+                dir = dir.turn(*turn);
             }
         }
     }

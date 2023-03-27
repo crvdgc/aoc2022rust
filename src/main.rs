@@ -99,7 +99,11 @@ fn main() {
         (21, 2) => d21::part0(d21::example_input()),
         (21, 3) => d21::part1(d21::example_input()),
         (22, 0) => d22::part0(&input_str[..], 150),
-        (22, 1) => d22::part1(&input_str[..]),
+        (22, 1) => d22::part1(
+            &input_str[..],
+            args[3].parse().unwrap(),
+            args[4].parse().unwrap(),
+        ),
         (22, 2) => d22::part0(d22::example_input(), 16),
         (22, 3) => panic!("actually..."),
         _ => panic!("unimplemented: day {} part {}", day, part),
